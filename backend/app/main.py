@@ -37,19 +37,19 @@ try:
 finally:
     db.close()
 
-app.include_router(auth.router)
-app.include_router(properties.router)
-app.include_router(tenants.router)
-app.include_router(leases.router)
-app.include_router(charges.router)
-app.include_router(payments.router)
-app.include_router(expenses.router)
-app.include_router(cash.router)
-app.include_router(reports.router)
-app.include_router(search.router)
-app.include_router(settings.router)
-app.include_router(backup.router)
-app.include_router(audit.router)
+app.include_router(auth.router, prefix="/api")
+app.include_router(properties.router, prefix="/api")
+app.include_router(tenants.router, prefix="/api")
+app.include_router(leases.router, prefix="/api")
+app.include_router(charges.router, prefix="/api")
+app.include_router(payments.router, prefix="/api")
+app.include_router(expenses.router, prefix="/api")
+app.include_router(cash.router, prefix="/api")
+app.include_router(reports.router, prefix="/api")
+app.include_router(search.router, prefix="/api")
+app.include_router(settings.router, prefix="/api")
+app.include_router(backup.router, prefix="/api")
+app.include_router(audit.router, prefix="/api")
 
 @app.get("/health")
 def health():
@@ -59,6 +59,24 @@ def health():
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 from pathlib import Path as _P
+from fastapi.responses import FileResponse, JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
 _static = _P(__file__).resolve().parent.parent / "static"
 if _static.exists():
     app.mount("/", StaticFiles(directory=str(_static), html=True), name="static")
+
+
+@app.exception_handler(StarletteHTTPException)
+async def spa_fallback(request, exc):
+    """Let the React router handle deep links (e.g. refreshing on /properties)."""
+    path = request.url.path
+    index = _static / "index.html"
+    if (
+        exc.status_code == 404
+        and request.method in ("GET", "HEAD")
+        and index.exists()
+        and not path.startswith(("/api", "/health", "/uploads"))
+    ):
+        return FileResponse(index)
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)

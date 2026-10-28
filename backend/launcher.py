@@ -2,13 +2,14 @@
 
 - يعمل على 0.0.0.0 حتى يستطيع الهاتف على نفس شبكة الواي فاي فتح البرنامج.
 - يفتح المتصفح تلقائياً على الجهاز.
-- يكتب ملف mobile-access.txt يحتوي رابط الهاتف.
+- يكتب ملف mobile-access.txt يحتوي رابط الهاتف، وملف launcher.log للأخطاء.
 """
 import os
 import socket
 import sys
 import threading
 import time
+import traceback
 import urllib.request
 import webbrowser
 from pathlib import Path
@@ -16,13 +17,21 @@ from pathlib import Path
 # When frozen, data lives next to the exe
 if getattr(sys, "frozen", False):
     BASE = Path(sys.executable).resolve().parent
-    os.environ.setdefault("DATA_DIR", str(BASE / "data"))
 else:
     BASE = Path(__file__).resolve().parent
-    os.environ.setdefault("DATA_DIR", str(BASE / "data"))
 
+os.environ.setdefault("DATA_DIR", str(BASE / "data"))
 DATA_DIR = Path(os.environ["DATA_DIR"])
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+# A windowed (console=False) build has no stdout/stderr. uvicorn and print()
+# both need them, so redirect everything to a log file before importing.
+if sys.stdout is None or sys.stderr is None:
+    _log = open(DATA_DIR / "launcher.log", "a", encoding="utf-8", buffering=1)
+    if sys.stdout is None:
+        sys.stdout = _log
+    if sys.stderr is None:
+        sys.stderr = _log
 
 import uvicorn
 from app.main import app
@@ -55,8 +64,7 @@ def server_alive() -> bool:
         return False
 
 
-def write_mobile_info(ip: str) -> Path:
-    path = BASE / "mobile-access.txt"
+def write_mobile_info(ip: str) -> None:
     url = f"http://{ip}:{PORT}"
     text = (
         "العقارات والإيجارات — الدخول من الهاتف\n"
@@ -69,40 +77,46 @@ def write_mobile_info(ip: str) -> Path:
         f"رابط الكمبيوتر: {LOCAL_URL}\n"
     )
     try:
-        path.write_text(text, encoding="utf-8")
+        (BASE / "mobile-access.txt").write_text(text, encoding="utf-8")
     except Exception:
         pass
-    return path
 
 
-def run_server():
-    uvicorn.run(app, host=HOST, port=PORT, log_level="warning")
+def run_server() -> None:
+    """Runs uvicorn in this thread and never lets an error kill the process."""
+    try:
+        uvicorn.run(app, host=HOST, port=PORT, log_level="warning")
+    except BaseException:
+        with open(DATA_DIR / "launcher.log", "a", encoding="utf-8") as fh:
+            fh.write(traceback.format_exc())
 
 
-if __name__ == "__main__":
+def main() -> None:
     if server_alive():
         webbrowser.open(LOCAL_URL)
-        sys.exit(0)
+        return
 
     threading.Thread(target=run_server, daemon=True).start()
 
-    ready = False
-    for _ in range(60):
+    for _ in range(120):
         if server_alive():
-            ready = True
             break
         time.sleep(0.5)
 
-    ip = lan_ip()
-    write_mobile_info(ip)
+    write_mobile_info(lan_ip())
 
-    if ready:
+    if server_alive():
         webbrowser.open(LOCAL_URL)
     else:
-        print(f"تعذر تشغيل الخادم على المنفذ {PORT}. أغلق النسخة الأخرى ثم أعد المحاولة.")
+        print(f"تعذر تشغيل الخادم على المنفذ {PORT}.")
 
+    while True:
+        time.sleep(3600)
+
+
+if __name__ == "__main__":
     try:
-        while True:
-            time.sleep(3600)
-    except KeyboardInterrupt:
-        pass
+        main()
+    except BaseException:
+        with open(DATA_DIR / "launcher.log", "a", encoding="utf-8") as fh:
+            fh.write(traceback.format_exc())
