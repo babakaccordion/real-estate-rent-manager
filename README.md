@@ -64,6 +64,10 @@ https://github.com/babakaccordion/real-estate-rent-manager
 
 https://github.com/babakaccordion/real-estate-rent-manager/releases/latest
 
+## النشر على الإنترنت (الوصول من الآيفون والكمبيوتر مغلق)
+
+انظر `DEPLOY.md` — فيه خطوات Render + Neon مجاناً، أو VPS عبر `docker compose`.
+
 ## مكان تخزين البيانات
 
 - قاعدة البيانات: `backend/data/app.db` (SQLite)

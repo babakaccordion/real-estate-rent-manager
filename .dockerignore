@@ -1,0 +1,11 @@
+.git
+.gitignore
+frontend
+backend/build
+backend/dist
+backend/data
+backend/tests
+**/__pycache__
+**/*.pyc
+*.md
+!README.md

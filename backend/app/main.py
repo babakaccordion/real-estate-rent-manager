@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from .config import CORS_ORIGINS, UPLOADS_DIR, DATA_DIR
+from .config import CORS_ORIGINS, UPLOADS_DIR, DATA_DIR, ADMIN_USERNAME, ADMIN_PASSWORD
 from .database import Base, engine
 from .models import *  # noqa
 from .routers import auth, properties, tenants, leases, charges, payments, expenses, cash, reports, search, settings, backup, audit
@@ -25,8 +25,8 @@ Base.metadata.create_all(bind=engine)
 # seed admin
 db = SessionLocal()
 try:
-    if not db.query(User).filter(User.username == "admin").first():
-        db.add(User(username="admin", hashed_password=hash_password("REMOVED"), full_name="مدير النظام", role=UserRole.ADMIN.value))
+    if not db.query(User).filter(User.username == ADMIN_USERNAME).first():
+        db.add(User(username=ADMIN_USERNAME, hashed_password=hash_password(ADMIN_PASSWORD), full_name="مدير النظام", role=UserRole.ADMIN.value))
         db.commit()
     # default settings
     defaults = {"currency": "JOD", "decimal_places": "3", "timezone": "Asia/Amman", "company_name": "العقارات والإيجارات"}
