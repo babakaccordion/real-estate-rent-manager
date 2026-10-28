@@ -62,7 +62,7 @@ https://github.com/babakaccordion/real-estate-rent-manager
 
 ## تحميل نسخة ويندوز
 
-https://github.com/babakaccordion/real-estate-rent-manager/releases/latest
+نسخة ويندوز غير منشورة على GitHub (بناء محلي فقط).
 
 ## النشر على الإنترنت (الوصول من الآيفون والكمبيوتر مغلق)
 
