@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => {
         ? [
             VitePWA({
               registerType: 'autoUpdate',
-              includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
+              includeAssets: ['favicon.ico', 'favicon-32.png', 'favicon-64.png', 'icons/apple-touch-icon.png'],
               manifest: {
                 name: 'العقارات والإيجارات',
                 short_name: 'العقارات',
