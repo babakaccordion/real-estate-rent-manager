@@ -43,6 +43,9 @@ export default defineConfig(({ mode }) => {
                 // ملفات JavaScript كبيرة نسبيًا (المكتبات) — ارفع حد التخزين المؤقت
                 maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
                 navigateFallback: `${base}index.html`,
+                // تخزين صورة شاشة الترحيب للعمل دون إنترنت (صور إقلاع iOS تُترك لذاكرة المتصفح)
+                globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg}'],
+                globIgnores: ['**/apple-splash/**'],
               },
             }),
           ]

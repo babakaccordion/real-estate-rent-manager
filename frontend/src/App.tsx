@@ -3,6 +3,7 @@ import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router
 import { AuthProvider } from './contexts/AuthContext'
 import { LOCAL_MODE } from './api/client'
 import { ToastProvider } from './contexts/ToastContext'
+import SplashScreen from './components/SplashScreen'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -31,6 +32,8 @@ export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
+        {/* شاشة الترحيب تظهر عند فتح تطبيق الهاتف فقط */}
+        {LOCAL_MODE && <SplashScreen />}
         <Router>
           <Routes>
             <Route path="/login" element={<Login />} />
