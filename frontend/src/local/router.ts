@@ -1,5 +1,6 @@
 import type { LocalDB, LocalUser, Movement, Note } from './types'
 import { loadDB, nextId, saveDB } from './db'
+import { saveAutosave } from './backup'
 import { ApiError, badRequest, notFound, unauthorized } from './errors'
 import { fromU, toU } from './money'
 import {
@@ -219,14 +220,26 @@ let bootstrapped = false
 
 export function handleRequest(method: string, path: string, params: Params, body: Body): unknown {
   const db = loadDB()
+  USER.username = db.users[0]?.username ?? USER.username
   if (!bootstrapped) {
     bootstrapped = true
     // عند فتح التطبيق: أنشئ استحقاقات الأشهر الجديدة وحدّث حالات التأخير تلقائيًا.
     generateAllCharges(db)
     refreshChargeStatuses(db)
   }
-  const result = route(db, method.toLowerCase(), normalizePath(path), params || {}, body || {})
+  const verb = method.toLowerCase()
+  const routePath = normalizePath(path)
+  const result = route(db, verb, routePath, params || {}, body || {})
   saveDB(db)
+  // حفظ تلقائي بعد كل إضافة أو تعديل أو حذف (يمكن تعطيله من الإعدادات).
+  if (
+    verb !== 'get' &&
+    db.settings.auto_backup !== '0' &&
+    !routePath.startsWith('/auth') &&
+    !routePath.startsWith('/backup')
+  ) {
+    saveAutosave(db)
+  }
   return result
 }
 
@@ -259,6 +272,27 @@ function route(db: LocalDB, method: string, path: string, params: Params, body: 
   if (method === 'get' && path === '/auth/me') {
     const user = db.users[0]
     if (!user) throw unauthorized()
+    return userOut(user)
+  }
+
+  if (method === 'post' && path === '/auth/change-credentials') {
+    const user = db.users[0]
+    if (!user) throw unauthorized()
+    if (user.password !== String(body?.current_password ?? '')) {
+      throw badRequest('كلمة المرور الحالية غير صحيحة')
+    }
+    const username = String(body?.username ?? '').trim()
+    if (username && username !== user.username) {
+      if (username.length < 3) throw badRequest('اسم المستخدم يجب أن يكون 3 أحرف على الأقل')
+      if (db.users.some((u) => u.username === username)) throw badRequest('اسم المستخدم مستخدم مسبقًا')
+      user.username = username
+    }
+    const newPassword = String(body?.new_password ?? '')
+    if (newPassword) {
+      if (newPassword.length < 6) throw badRequest('كلمة المرور يجب أن تكون 6 أحرف على الأقل')
+      user.password = newPassword
+    }
+    logAudit(db, user.username, 'auth.credentials', 'user', user.id, null, { username: user.username })
     return userOut(user)
   }
 

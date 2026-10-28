@@ -7,12 +7,19 @@ import { Button } from '../components/ui/Button'
 import { Input, Label } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { DOWNLOAD_HINT, LOCAL_STORAGE_NOTE, STORAGE_KEY, loadDB, resetDB } from '../local/db'
-import { dataRangeLabel, downloadBackup, readFileAsText, restoreBackup } from '../local/backup'
+import { autosaveInfo, autosaveText, dataRangeLabel, downloadBackup, readFileAsText, restoreBackup } from '../local/backup'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function SettingsPage() {
   const qc = useQueryClient()
   const toast = useToast()
+  const { user, refreshUser } = useAuth()
   const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: () => api.get('/settings').then((r) => r.data) })
+  const { data: autoInfo, refetch: refetchAuto } = useQuery({
+    queryKey: ['auto-info'],
+    queryFn: () => api.get('/backup/auto-info').then((r) => r.data),
+    enabled: !LOCAL_MODE,
+  })
   const [currency, setCurrency] = useState('JOD')
   const [decimals, setDecimals] = useState('3')
   const [tz, setTz] = useState('Asia/Amman')
@@ -22,7 +29,16 @@ export default function SettingsPage() {
       : { properties: 0, tenants: 0, leases: 0, charges: 0, payments: 0, expenses: 0, movements: 0, bytes: 0, range: '' },
   )
   const [restoring, setRestoring] = useState(false)
+  const [autoAt, setAutoAt] = useState<string | null>(() => (LOCAL_MODE ? autosaveInfo().at : null))
+  const [autoRestoring, setAutoRestoring] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newUsername, setNewUsername] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [savingCreds, setSavingCreds] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
+
+  const autoEnabled = (settings?.auto_backup ?? '1') !== '0'
 
   useEffect(() => {
     if (!settings) return
@@ -31,12 +47,26 @@ export default function SettingsPage() {
     if (settings.timezone) setTz(settings.timezone)
   }, [settings])
 
+  useEffect(() => {
+    if (user?.username) setNewUsername(user.username)
+  }, [user?.username])
+
   const save = useMutation({
     mutationFn: (d: any) => api.put('/settings', d),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['settings'] }); toast.show('تم حفظ الإعداد') },
   })
 
   const sizeLabel = useMemo(() => `${Math.max(1, Math.round(stats.bytes / 1024))} كيلوبايت`, [stats.bytes])
+
+  const autoLabel = useMemo(() => {
+    const at = LOCAL_MODE ? autoAt : autoInfo?.last_at
+    if (!at) return 'لم يتم بعد'
+    try {
+      return new Date(at).toLocaleString('ar-JO')
+    } catch {
+      return String(at)
+    }
+  }, [autoAt, autoInfo])
 
   const doExport = () => {
     const filename = downloadBackup()
@@ -73,6 +103,72 @@ export default function SettingsPage() {
     qc.clear()
     setStats(statsOf())
     toast.show('تم حذف جميع البيانات المحلية')
+  }
+
+  const toggleAuto = useMutation({
+    mutationFn: (enabled: boolean) => api.put('/settings', { key: 'auto_backup', value: enabled ? '1' : '0' }),
+    onSuccess: (_data, enabled) => {
+      qc.invalidateQueries({ queryKey: ['settings'] })
+      toast.show(enabled ? 'تم تفعيل الحفظ التلقائي' : 'تم تعطيل الحفظ التلقائي')
+    },
+    onError: (e: any) => toast.show(e?.response?.data?.detail || 'تعذّر تغيير الإعداد', 'error'),
+  })
+
+  const submitCredentials = async () => {
+    if (!currentPassword) {
+      toast.show('أدخل كلمة المرور الحالية أولاً', 'error')
+      return
+    }
+    if (newPassword && newPassword !== confirmPassword) {
+      toast.show('كلمتا المرور الجديدتان غير متطابقتين', 'error')
+      return
+    }
+    if (!newUsername.trim() && !newPassword) {
+      toast.show('أدخل اسم المستخدم أو كلمة مرور جديدة', 'error')
+      return
+    }
+    setSavingCreds(true)
+    try {
+      await api.post('/auth/change-credentials', {
+        current_password: currentPassword,
+        username: newUsername.trim() || user?.username,
+        new_password: newPassword || undefined,
+      })
+      await refreshUser()
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      toast.show('تم تحديث بيانات الدخول بنجاح')
+    } catch (e: any) {
+      toast.show(e?.response?.data?.detail || e?.message || 'فشل تحديث بيانات الدخول', 'error')
+    } finally {
+      setSavingCreds(false)
+    }
+  }
+
+  const restoreAuto = async () => {
+    if (!confirm('سيتم استبدال البيانات الحالية بآخر حفظ تلقائي. هل تريد المتابعة؟')) return
+    setAutoRestoring(true)
+    try {
+      if (LOCAL_MODE) {
+        const text = autosaveText()
+        if (!text) throw new Error('لا يوجد حفظ تلقائي بعد')
+        const result = restoreBackup(text)
+        qc.clear()
+        setStats(statsOf())
+        setAutoAt(autosaveInfo().at)
+        toast.show(`تمت استعادة آخر حفظ تلقائي: ${result.counts.properties} عقار، ${result.counts.tenants} مستأجر`)
+      } else {
+        const r = await api.post('/backup/auto-restore')
+        qc.clear()
+        refetchAuto()
+        toast.show(`تمت استعادة آخر حفظ تلقائي (${r.data?.counts?.properties ?? 0} عقار)`)
+      }
+    } catch (e: any) {
+      toast.show(e?.response?.data?.detail || e?.message || 'فشل استعادة الحفظ التلقائي', 'error')
+    } finally {
+      setAutoRestoring(false)
+    }
   }
 
   return (
@@ -124,6 +220,62 @@ export default function SettingsPage() {
             <Input value={tz} onChange={(e) => setTz(e.target.value)} />
           </div>
           <Button onClick={() => { save.mutate({ key: 'currency', value: currency }); save.mutate({ key: 'decimal_places', value: decimals }); save.mutate({ key: 'timezone', value: tz }) }}>حفظ</Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>الأمان وبيانات الدخول</CardTitle></CardHeader>
+        <CardContent className="py-4 space-y-3 max-w-md">
+          <p className="text-xs text-gray-500">
+            اسم المستخدم (رمز الدخول) وكلمة المرور المطلوبان عند فتح البرنامج. لتغيير أي منهما أدخل كلمة المرور الحالية.
+          </p>
+          <div>
+            <Label>كلمة المرور الحالية *</Label>
+            <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} autoComplete="current-password" />
+          </div>
+          <div>
+            <Label>اسم المستخدم (رمز الدخول)</Label>
+            <Input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} autoComplete="username" />
+          </div>
+          <div>
+            <Label>كلمة مرور جديدة (اتركها فارغة إذا لا تريد تغييرها)</Label>
+            <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" />
+          </div>
+          <div>
+            <Label>تأكيد كلمة المرور الجديدة</Label>
+            <Input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" />
+          </div>
+          <Button onClick={submitCredentials} disabled={savingCreds}>
+            {savingCreds ? 'جارٍ الحفظ...' : 'حفظ بيانات الدخول'}
+          </Button>
+          <div className="text-xs text-gray-500">كلمة المرور الافتراضية: REMOVED — يُنصح بتغييرها.</div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>الحفظ التلقائي</CardTitle></CardHeader>
+        <CardContent className="py-4 space-y-3">
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              checked={autoEnabled}
+              onChange={(e) => toggleAuto.mutate(e.target.checked)}
+              disabled={toggleAuto.isPending || !settings}
+            />
+            حفظ نسخة احتياطية تلقائيًا بعد كل إضافة أو تعديل أو حذف
+          </label>
+          <div className="text-sm text-gray-600">آخر حفظ تلقائي: <span className="font-semibold text-[#1e3a5f]">{autoLabel}</span></div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={restoreAuto} disabled={autoRestoring}>
+              {autoRestoring ? 'جارٍ الاستعادة...' : 'استعادة آخر حفظ تلقائي'}
+            </Button>
+          </div>
+          <div className="text-xs text-gray-500">
+            {LOCAL_MODE
+              ? 'النسخة التلقائية محفوظة داخل هذا المتصفح، وتُحدَّث بعد كل عملية حفظ.'
+              : `النسخ التلقائية محفوظة في مجلد data/backups (آخر 30 نسخة)${autoInfo?.count ? ` — العدد الحالي: ${autoInfo.count}` : ''}.`}
+          </div>
         </CardContent>
       </Card>
 

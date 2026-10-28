@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..deps import require_role
-from ..services.backup import export_all, restore_from_file
+from ..models import AppSetting
+from ..services.backup import export_all, restore_from_file, auto_backup_info, restore_auto_backup
 from fastapi.responses import FileResponse
 import shutil, os
 from ..config import BACKUPS_DIR
@@ -40,3 +41,21 @@ def do_restore(file: UploadFile = File(...), db: Session = Depends(get_db), user
 def list_backups(user=Depends(require_role("admin"))):
     files = sorted(BACKUPS_DIR.glob("backup_*.json"), reverse=True)
     return [{"name": f.name, "size": f.stat().st_size} for f in files]
+
+
+@router.get("/auto-info")
+def auto_info(db: Session = Depends(get_db), user=Depends(require_role("admin"))):
+    row = db.query(AppSetting).filter(AppSetting.key == "auto_backup").first()
+    info = auto_backup_info()
+    info["enabled"] = (row.value if row else "1") != "0"
+    return info
+
+
+@router.post("/auto-restore")
+def auto_restore(db: Session = Depends(get_db), user=Depends(require_role("admin"))):
+    try:
+        return restore_auto_backup(db)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"فشل الاستعادة: {e}")

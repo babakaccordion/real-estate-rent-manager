@@ -468,6 +468,51 @@ export function readFileAsText(file: File): Promise<string> {
   })
 }
 
+/* ------------------------------------------------------------------ */
+/* الحفظ التلقائي (نسخة داخل المتصفح بعد كل إضافة أو تعديل)            */
+/* ------------------------------------------------------------------ */
+
+export const AUTOSAVE_KEY = 'rr-autosave-v1'
+const AUTOSAVE_META_KEY = 'rr-autosave-meta-v1'
+
+export interface AutosaveInfo {
+  at: string | null
+  bytes: number
+}
+
+/** يحفظ لقطة كاملة من البيانات الحالية في التخزين المحلي. */
+export function saveAutosave(db: LocalDB = loadDB()): boolean {
+  try {
+    const text = backupJSON(db)
+    localStorage.setItem(AUTOSAVE_KEY, text)
+    localStorage.setItem(AUTOSAVE_META_KEY, JSON.stringify({ at: new Date().toISOString(), bytes: text.length }))
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function autosaveText(): string | null {
+  try {
+    return localStorage.getItem(AUTOSAVE_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function autosaveInfo(): AutosaveInfo {
+  try {
+    const meta = JSON.parse(localStorage.getItem(AUTOSAVE_META_KEY) || 'null')
+    const text = localStorage.getItem(AUTOSAVE_KEY) || ''
+    return {
+      at: meta?.at ? String(meta.at) : null,
+      bytes: Number(meta?.bytes) || text.length,
+    }
+  } catch {
+    return { at: null, bytes: 0 }
+  }
+}
+
 /** اسم مختصر للعرض: آخر شهرين في البيانات. */
 export function dataRangeLabel(db: LocalDB = loadDB()): string {
   const dates = [

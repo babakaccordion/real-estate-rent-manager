@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from ..database import get_db
 from ..models import User, UserRole
 from ..utils.security import hash_password, verify_password, create_access_token
-from ..deps import get_current_user
+from ..deps import get_current_user, require_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -20,6 +20,12 @@ class UserCreate(BaseModel):
     full_name: str
     email: str | None = None
     role: str = UserRole.VIEWER.value
+
+
+class CredentialsIn(BaseModel):
+    current_password: str
+    username: str | None = None
+    new_password: str | None = None
 
 
 class UserOut(BaseModel):
@@ -49,6 +55,30 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
 def me(user=Depends(get_current_user)):
     if user is None:
         raise HTTPException(status_code=401, detail="غير مسجل")
+    return user
+
+
+@router.post("/change-credentials", response_model=UserOut)
+def change_credentials(data: CredentialsIn, db: Session = Depends(get_db), user=Depends(require_user)):
+    """تغيير اسم المستخدم (رمز الدخول) و/أو كلمة المرور بعد التحقق من الكلمة الحالية."""
+    if not verify_password(data.current_password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="كلمة المرور الحالية غير صحيحة")
+
+    new_username = (data.username or "").strip()
+    if new_username and new_username != user.username:
+        if len(new_username) < 3:
+            raise HTTPException(status_code=400, detail="اسم المستخدم يجب أن يكون 3 أحرف على الأقل")
+        if db.query(User).filter(User.username == new_username, User.id != user.id).first():
+            raise HTTPException(status_code=400, detail="اسم المستخدم مستخدم مسبقًا")
+        user.username = new_username
+
+    if data.new_password:
+        if len(data.new_password) < 6:
+            raise HTTPException(status_code=400, detail="كلمة المرور يجب أن تكون 6 أحرف على الأقل")
+        user.hashed_password = hash_password(data.new_password)
+
+    db.commit()
+    db.refresh(user)
     return user
 
 

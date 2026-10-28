@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime, date, timezone
 from decimal import Decimal
 from sqlalchemy.orm import Session
@@ -7,6 +8,9 @@ from ..models import (
     Expense, CashMovement, Note, AuditLog, AppSetting,
 )
 from ..config import DATA_DIR, BACKUPS_DIR
+
+AUTO_PREFIX = "autosave_"
+AUTO_KEEP = 30
 
 
 def _default(o):
@@ -17,7 +21,7 @@ def _default(o):
     raise TypeError(f"Not serializable: {type(o)}")
 
 
-def export_all(db: Session) -> str:
+def _collect(db: Session) -> dict:
     data = {}
     for name, model in [
         ("users", User), ("properties", Property), ("units", Unit), ("tenants", Tenant),
@@ -28,11 +32,52 @@ def export_all(db: Session) -> str:
     ]:
         rows = db.query(model).all()
         data[name] = [{c.name: getattr(r, c.name) for c in model.__table__.columns} for r in rows]
+    return data
+
+
+def export_all(db: Session) -> str:
+    data = _collect(db)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = BACKUPS_DIR / f"backup_{ts}.json"
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2, default=_default)
     return str(path)
+
+
+def auto_backup(db: Session) -> str:
+    """نسخة تلقائية بعد كل إضافة أو تعديل (تُحفظ آخر 30 نسخة)."""
+    data = _collect(db)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    path = BACKUPS_DIR / f"{AUTO_PREFIX}{ts}.json"
+    tmp = path.with_suffix(".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, default=_default)
+    os.replace(tmp, path)
+    files = sorted(BACKUPS_DIR.glob(f"{AUTO_PREFIX}*.json"), key=lambda p: p.stat().st_mtime)
+    for old in files[:-AUTO_KEEP]:
+        try:
+            old.unlink()
+        except OSError:
+            pass
+    return str(path)
+
+
+def auto_backup_info() -> dict:
+    files = sorted(BACKUPS_DIR.glob(f"{AUTO_PREFIX}*.json"), key=lambda p: p.stat().st_mtime)
+    latest = files[-1] if files else None
+    return {
+        "last_at": datetime.fromtimestamp(latest.stat().st_mtime).isoformat(timespec="seconds") if latest else None,
+        "filename": latest.name if latest else None,
+        "size": latest.stat().st_size if latest else 0,
+        "count": len(files),
+    }
+
+
+def restore_auto_backup(db: Session) -> dict:
+    files = sorted(BACKUPS_DIR.glob(f"{AUTO_PREFIX}*.json"), key=lambda p: p.stat().st_mtime)
+    if not files:
+        raise FileNotFoundError("لا توجد نسخة تلقائية بعد")
+    return restore_from_file(db, str(files[-1]))
 
 
 def _coerce_row(model, row: dict) -> dict:

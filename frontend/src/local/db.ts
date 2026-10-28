@@ -17,6 +17,7 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   currency: 'JOD',
   decimal_places: '3',
   timezone: 'Asia/Amman',
+  auto_backup: '1',
 }
 
 let cache: LocalDB | null = null

@@ -6,6 +6,7 @@ from .database import Base, engine
 from .models import *  # noqa
 from .routers import auth, properties, tenants, leases, charges, payments, expenses, cash, reports, search, settings, backup, audit
 from .utils.security import hash_password
+from .services.backup import auto_backup
 from sqlalchemy.orm import Session
 from .database import SessionLocal
 from .models import User, UserRole, AppSetting
@@ -29,7 +30,7 @@ try:
         db.add(User(username=ADMIN_USERNAME, hashed_password=hash_password(ADMIN_PASSWORD), full_name="مدير النظام", role=UserRole.ADMIN.value))
         db.commit()
     # default settings
-    defaults = {"currency": "JOD", "decimal_places": "3", "timezone": "Asia/Amman", "company_name": "العقارات والإيجارات"}
+    defaults = {"currency": "JOD", "decimal_places": "3", "timezone": "Asia/Amman", "company_name": "العقارات والإيجارات", "auto_backup": "1"}
     for k, v in defaults.items():
         if not db.query(AppSetting).filter(AppSetting.key == k).first():
             db.add(AppSetting(key=k, value=v))
@@ -50,6 +51,32 @@ app.include_router(search.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
 app.include_router(backup.router, prefix="/api")
 app.include_router(audit.router, prefix="/api")
+
+
+@app.middleware("http")
+async def autosave_middleware(request, call_next):
+    """حفظ تلقائي (نسخة احتياطية) بعد كل إضافة أو تعديل أو حذف ناجح."""
+    response = await call_next(request)
+    try:
+        path = request.url.path
+        if (
+            request.method in ("POST", "PUT", "PATCH", "DELETE")
+            and response.status_code < 400
+            and path.startswith("/api/")
+            and not path.startswith("/api/auth/")
+            and not path.startswith("/api/backup/")
+        ):
+            adb = SessionLocal()
+            try:
+                row = adb.query(AppSetting).filter(AppSetting.key == "auto_backup").first()
+                if (row.value if row else "1") != "0":
+                    auto_backup(adb)
+            finally:
+                adb.close()
+    except Exception:
+        # الحفظ التلقائي لا يجب أن يعطّل العملية الأساسية
+        pass
+    return response
 
 @app.get("/health")
 def health():

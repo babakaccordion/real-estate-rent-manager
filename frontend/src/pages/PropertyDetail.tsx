@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
+import { useToast } from '../contexts/ToastContext'
 import { Card, CardContent } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
 import { formatMoney, formatDate } from '../lib/utils'
 import { ArrowRight, Building2 } from 'lucide-react'
 
@@ -11,13 +14,50 @@ const STATUS_LABELS: Record<string,string> = { rented:'مؤجر', partial:'مؤ�
 
 export default function PropertyDetail() {
   const { id } = useParams()
+  const qc = useQueryClient()
+  const toast = useToast()
   const [tab, setTab] = useState('info')
+  const [noteText, setNoteText] = useState('')
   const { data: prop } = useQuery({ queryKey: ['property', id], queryFn: () => api.get(`/properties/${id}`).then((r) => r.data) })
   const { data: units = [] } = useQuery({ queryKey: ['units', id], queryFn: () => api.get(`/properties/${id}/units`).then((r) => r.data) })
   const { data: notes = [] } = useQuery({ queryKey: ['propnotes', id], queryFn: () => api.get(`/properties/${id}/notes`).then((r) => r.data) })
   const { data: charges = [] } = useQuery({ queryKey: ['charges', id], queryFn: () => api.get('/charges', { params: { property_id: id } }).then((r) => r.data) })
   const { data: payments = [] } = useQuery({ queryKey: ['payments', id], queryFn: () => api.get('/payments', { params: { property_id: id } }).then((r) => r.data) })
   const { data: expenses = [] } = useQuery({ queryKey: ['expenses', id], queryFn: () => api.get('/expenses', { params: { property_id: id } }).then((r) => r.data) })
+
+  const toggleStatus = useMutation({
+    mutationFn: async () => {
+      const status = prop.status === 'rented' ? 'vacant' : 'rented'
+      await api.put(`/properties/${id}`, {
+        name: prop.name,
+        property_type: prop.property_type,
+        address: prop.address,
+        city: prop.city,
+        district: prop.district,
+        description: prop.description,
+        units_count: prop.units_count,
+        status,
+        notes: prop.notes,
+      })
+      return status
+    },
+    onSuccess: (status) => {
+      qc.invalidateQueries({ queryKey: ['property', id] })
+      qc.invalidateQueries({ queryKey: ['properties'] })
+      toast.show(status === 'rented' ? 'تم تحويل العقار إلى مؤجر' : 'تم تحويل العقار إلى شاغر')
+    },
+    onError: (e: any) => toast.show(e.response?.data?.detail || 'تعذّر تغيير حالة العقار', 'error'),
+  })
+
+  const addNote = useMutation({
+    mutationFn: (content: string) => api.post(`/properties/${id}/notes`, { content }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['propnotes', id] })
+      setNoteText('')
+      toast.show('تم إضافة الملاحظة')
+    },
+    onError: (e: any) => toast.show(e.response?.data?.detail || 'خطأ', 'error'),
+  })
 
   if (!prop) return <div>جارٍ التحميل...</div>
 
@@ -42,9 +82,17 @@ export default function PropertyDetail() {
             </div>
             <Building2 size={32} className="text-gray-200" />
           </div>
-          <div className="mt-3 flex gap-2">
-            <span className={`px-2 py-0.5 rounded text-xs ${prop.status === 'rented' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{STATUS_LABELS[prop.status]}</span>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className={`px-2 py-0.5 rounded text-xs ${prop.status === 'rented' ? 'bg-green-100 text-green-700' : prop.status === 'vacant' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}`}>{STATUS_LABELS[prop.status]}</span>
             <span className="text-xs text-gray-400">الوحدات: {prop.units_count}</span>
+            <Button
+              size="sm"
+              variant={prop.status === 'rented' ? 'outline' : 'secondary'}
+              onClick={() => toggleStatus.mutate()}
+              disabled={toggleStatus.isPending}
+            >
+              {prop.status === 'rented' ? 'تحويل إلى شاغر' : 'تحويل إلى مؤجر'}
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -148,6 +196,10 @@ export default function PropertyDetail() {
       {tab === 'notes' && (
         <Card>
           <CardContent className="py-4 space-y-2">
+            <div className="flex gap-2 mb-3">
+              <Input value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="أضف ملاحظة..." />
+              <Button onClick={() => { if (noteText.trim()) addNote.mutate(noteText.trim()) }} disabled={addNote.isPending}>إضافة</Button>
+            </div>
             {notes.map((n: any) => (
               <div key={n.id} className="border-b py-2">
                 <div className="text-sm">{n.content}</div>

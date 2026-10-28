@@ -44,6 +44,7 @@ export default function TenantDetail() {
             <div><span className="text-gray-500">رقم الهوية:</span> {tenant.id_number}</div>
             <div><span className="text-gray-500">الحالة:</span> {tenant.status}</div>
             <div><span className="text-gray-500">الرصيد الدائن:</span> {formatMoney(tenant.credit_balance)}</div>
+            {tenant.notes && <div className="md:col-span-2"><span className="text-gray-500">ملاحظات:</span> {tenant.notes}</div>}
           </div>
         </CardContent>
       </Card>
