@@ -28,6 +28,11 @@ class CredentialsIn(BaseModel):
     new_password: str | None = None
 
 
+class SetupIn(BaseModel):
+    username: str
+    password: str
+
+
 class UserOut(BaseModel):
     id: int
     username: str
@@ -38,6 +43,35 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+@router.get("/status")
+def auth_status(db: Session = Depends(get_db)):
+    """هل يحتاج التطبيق إلى إعداد أولي؟ لا توجد أي بيانات دخول افتراضية منشورة."""
+    return {"needs_setup": db.query(User).count() == 0}
+
+
+@router.post("/setup")
+def setup(data: SetupIn, db: Session = Depends(get_db)):
+    """أول تشغيل فقط: إنشاء بيانات الدخول التي يختارها المستخدم بنفسه."""
+    if db.query(User).count() > 0:
+        raise HTTPException(status_code=400, detail="بيانات الدخول مُعدّة مسبقًا")
+    username = (data.username or "").strip()
+    if len(username) < 3:
+        raise HTTPException(status_code=400, detail="اسم المستخدم يجب أن يكون 3 أحرف على الأقل")
+    if len(data.password or "") < 8:
+        raise HTTPException(status_code=400, detail="كلمة المرور يجب أن تكون 8 أحرف على الأقل")
+    user = User(
+        username=username,
+        hashed_password=hash_password(data.password),
+        full_name="مدير النظام",
+        role=UserRole.ADMIN.value,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    token = create_access_token({"sub": str(user.id), "role": user.role, "username": user.username})
+    return {"access_token": token, "token_type": "bearer", "user": UserOut.model_validate(user)}
 
 
 @router.post("/login")
@@ -73,8 +107,8 @@ def change_credentials(data: CredentialsIn, db: Session = Depends(get_db), user=
         user.username = new_username
 
     if data.new_password:
-        if len(data.new_password) < 6:
-            raise HTTPException(status_code=400, detail="كلمة المرور يجب أن تكون 6 أحرف على الأقل")
+        if len(data.new_password) < 8:
+            raise HTTPException(status_code=400, detail="كلمة المرور يجب أن تكون 8 أحرف على الأقل")
         user.hashed_password = hash_password(data.new_password)
 
     db.commit()

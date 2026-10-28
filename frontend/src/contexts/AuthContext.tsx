@@ -13,6 +13,7 @@ interface AuthCtx {
   user: User | null
   token: string | null
   login: (username: string, password: string) => Promise<void>
+  setup: (username: string, password: string) => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
   loading: boolean
@@ -41,6 +42,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(r.data.user)
   }
 
+  // أول تشغيل على هذا الجهاز: إنشاء بيانات الدخول (لا توجد بيانات افتراضية منشورة).
+  const setup = async (username: string, password: string) => {
+    const r = await api.post('/auth/setup', { username, password })
+    localStorage.setItem('token', r.data.access_token)
+    setToken(r.data.access_token)
+    setUser(r.data.user)
+  }
+
   const logout = () => {
     localStorage.removeItem('token')
     setToken(null)
@@ -52,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(r.data)
   }
 
-  return <Ctx.Provider value={{ user, token, login, logout, refreshUser, loading }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ user, token, login, setup, logout, refreshUser, loading }}>{children}</Ctx.Provider>
 }
 
 export function useAuth() {

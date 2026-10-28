@@ -150,7 +150,8 @@ export interface AuditEntry {
 export interface LocalUser {
   id: Id
   username: string
-  password: string
+  /** بصمة مشفّرة (PBKDF2) — لا تُحفظ كلمة المرور نصًا صريحًا أبدًا. */
+  password_hash: string
   full_name: string
   role: string
 }

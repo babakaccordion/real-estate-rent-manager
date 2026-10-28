@@ -1,3 +1,9 @@
+import os
+import tempfile
+
+# قاعدة بيانات معزولة لكل تشغيل (لا تلمس بيانات التطبيق الحقيقية)
+os.environ.setdefault("DATA_DIR", tempfile.mkdtemp(prefix="rerm-test-"))
+
 import pytest
 from app.database import SessionLocal, Base, engine
 from app.models import (

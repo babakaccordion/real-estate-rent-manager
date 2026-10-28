@@ -1,3 +1,4 @@
+import secrets
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
@@ -5,9 +6,17 @@ from decimal import Decimal
 
 client = TestClient(app)
 
+# بيانات اختبار مؤقتة تُنشأ أثناء التشغيل فقط (لا توجد بيانات افتراضية في الكود).
+TEST_USERNAME = "tester"
+TEST_PASSWORD = secrets.token_urlsafe(16)
+
 
 def get_token():
-    r = client.post("/api/auth/login", json={"username": "admin", "password": "REMOVED"})
+    status = client.get("/api/auth/status").json()
+    if status.get("needs_setup"):
+        r = client.post("/api/auth/setup", json={"username": TEST_USERNAME, "password": TEST_PASSWORD})
+    else:
+        r = client.post("/api/auth/login", json={"username": TEST_USERNAME, "password": TEST_PASSWORD})
     assert r.status_code == 200, r.text
     return r.json()["access_token"]
 

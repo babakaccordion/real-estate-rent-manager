@@ -56,7 +56,7 @@ export const localAdapter: AxiosAdapter = async (config) => {
   }
 
   try {
-    const data = handleRequest(config.method || 'get', pathPart, params, parseBody(config.data))
+    const data = await handleRequest(config.method || 'get', pathPart, params, parseBody(config.data))
     return buildResponse(config, data)
   } catch (err) {
     if (err instanceof ApiError) {

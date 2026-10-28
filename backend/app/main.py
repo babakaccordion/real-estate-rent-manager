@@ -23,10 +23,15 @@ app.add_middleware(
 
 Base.metadata.create_all(bind=engine)
 
-# seed admin
+# إنشاء المدير الأول فقط عند تحديد بياناته صراحةً في متغيرات البيئة.
+# لا توجد بيانات دخول افتراضية داخل الكود؛ إن لم تُحدَّد فسيُطلب إنشاؤها عند أول تشغيل.
 db = SessionLocal()
 try:
-    if not db.query(User).filter(User.username == ADMIN_USERNAME).first():
+    if (
+        ADMIN_USERNAME
+        and ADMIN_PASSWORD
+        and db.query(User).count() == 0
+    ):
         db.add(User(username=ADMIN_USERNAME, hashed_password=hash_password(ADMIN_PASSWORD), full_name="مدير النظام", role=UserRole.ADMIN.value))
         db.commit()
     # default settings

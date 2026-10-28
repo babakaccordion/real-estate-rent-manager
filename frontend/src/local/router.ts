@@ -1,6 +1,7 @@
 import type { LocalDB, LocalUser, Movement, Note } from './types'
 import { loadDB, nextId, saveDB } from './db'
 import { saveAutosave } from './backup'
+import { hashPassword, verifyPassword } from './auth'
 import { ApiError, badRequest, notFound, unauthorized } from './errors'
 import { fromU, toU } from './money'
 import {
@@ -34,7 +35,7 @@ import {
 type Params = Record<string, unknown>
 type Body = Record<string, any> | null
 
-const USER: LocalUser = { id: 1, username: 'admin', password: '', full_name: 'مدير النظام', role: 'admin' }
+const USER: LocalUser = { id: 1, username: '', password_hash: '', full_name: 'مدير النظام', role: 'admin' }
 
 function userOut(u: LocalUser) {
   return {
@@ -229,18 +230,21 @@ export function handleRequest(method: string, path: string, params: Params, body
   }
   const verb = method.toLowerCase()
   const routePath = normalizePath(path)
-  const result = route(db, verb, routePath, params || {}, body || {})
-  saveDB(db)
-  // حفظ تلقائي بعد كل إضافة أو تعديل أو حذف (يمكن تعطيله من الإعدادات).
-  if (
-    verb !== 'get' &&
-    db.settings.auto_backup !== '0' &&
-    !routePath.startsWith('/auth') &&
-    !routePath.startsWith('/backup')
-  ) {
-    saveAutosave(db)
+  const finish = (result: unknown) => {
+    saveDB(db)
+    // حفظ تلقائي بعد كل إضافة أو تعديل أو حذف (يمكن تعطيله من الإعدادات).
+    if (
+      verb !== 'get' &&
+      db.settings.auto_backup !== '0' &&
+      !routePath.startsWith('/auth') &&
+      !routePath.startsWith('/backup')
+    ) {
+      saveAutosave(db)
+    }
+    return result
   }
-  return result
+  const result = route(db, verb, routePath, params || {}, body || {})
+  return result instanceof Promise ? result.then(finish) : finish(result)
 }
 
 function normalizePath(path: string): string {
@@ -255,18 +259,47 @@ function route(db: LocalDB, method: string, path: string, params: Params, body: 
   let m: RegExpMatchArray | null
 
   /* ---------------------------- المصادقة --------------------------- */
+  // حالة الإعداد: هل توجد بيانات دخول على هذا الجهاز؟
+  if (method === 'get' && path === '/auth/status') {
+    return { needs_setup: db.users.length === 0 }
+  }
+
+  // أول تشغيل فقط: إنشاء بيانات الدخول (اسم المستخدم + كلمة مرور خاصة بالمستخدم).
+  if (method === 'post' && path === '/auth/setup') {
+    if (db.users.length > 0) throw badRequest('بيانات الدخول مُعدّة مسبقًا على هذا الجهاز')
+    const username = String(body?.username ?? '').trim()
+    const password = String(body?.password ?? '')
+    if (username.length < 3) throw badRequest('اسم المستخدم يجب أن يكون 3 أحرف على الأقل')
+    if (password.length < 8) throw badRequest('كلمة المرور يجب أن تكون 8 أحرف على الأقل')
+    return (async () => {
+      const user: LocalUser = {
+        id: 1,
+        username,
+        password_hash: await hashPassword(password),
+        full_name: 'مدير النظام',
+        role: 'admin',
+      }
+      db.users.push(user)
+      logAudit(db, user.username, 'auth.setup', 'user', user.id, null, { username: user.username })
+      return { access_token: `local-${user.id}-${Date.now()}`, token_type: 'bearer', user: userOut(user) }
+    })()
+  }
+
   if (method === 'post' && path === '/auth/login') {
     const username = String(body?.username ?? '').trim()
     const password = String(body?.password ?? '')
     const user = db.users.find((u) => u.username === username)
-    if (!user || user.password !== password) {
-      throw new ApiError(401, 'اسم المستخدم أو كلمة المرور غير صحيحة')
-    }
-    return {
-      access_token: `local-${user.id}-${Date.now()}`,
-      token_type: 'bearer',
-      user: userOut(user),
-    }
+    if (!user) throw new ApiError(401, 'اسم المستخدم أو كلمة المرور غير صحيحة')
+    return (async () => {
+      if (!(await verifyPassword(password, user.password_hash))) {
+        throw new ApiError(401, 'اسم المستخدم أو كلمة المرور غير صحيحة')
+      }
+      return {
+        access_token: `local-${user.id}-${Date.now()}`,
+        token_type: 'bearer',
+        user: userOut(user),
+      }
+    })()
   }
 
   if (method === 'get' && path === '/auth/me') {
@@ -278,22 +311,24 @@ function route(db: LocalDB, method: string, path: string, params: Params, body: 
   if (method === 'post' && path === '/auth/change-credentials') {
     const user = db.users[0]
     if (!user) throw unauthorized()
-    if (user.password !== String(body?.current_password ?? '')) {
-      throw badRequest('كلمة المرور الحالية غير صحيحة')
-    }
-    const username = String(body?.username ?? '').trim()
-    if (username && username !== user.username) {
-      if (username.length < 3) throw badRequest('اسم المستخدم يجب أن يكون 3 أحرف على الأقل')
-      if (db.users.some((u) => u.username === username)) throw badRequest('اسم المستخدم مستخدم مسبقًا')
-      user.username = username
-    }
-    const newPassword = String(body?.new_password ?? '')
-    if (newPassword) {
-      if (newPassword.length < 6) throw badRequest('كلمة المرور يجب أن تكون 6 أحرف على الأقل')
-      user.password = newPassword
-    }
-    logAudit(db, user.username, 'auth.credentials', 'user', user.id, null, { username: user.username })
-    return userOut(user)
+    return (async () => {
+      if (!(await verifyPassword(String(body?.current_password ?? ''), user.password_hash))) {
+        throw badRequest('كلمة المرور الحالية غير صحيحة')
+      }
+      const username = String(body?.username ?? '').trim()
+      if (username && username !== user.username) {
+        if (username.length < 3) throw badRequest('اسم المستخدم يجب أن يكون 3 أحرف على الأقل')
+        if (db.users.some((u) => u.username === username)) throw badRequest('اسم المستخدم مستخدم مسبقًا')
+        user.username = username
+      }
+      const newPassword = String(body?.new_password ?? '')
+      if (newPassword) {
+        if (newPassword.length < 8) throw badRequest('كلمة المرور يجب أن تكون 8 أحرف على الأقل')
+        user.password_hash = await hashPassword(newPassword)
+      }
+      logAudit(db, user.username, 'auth.credentials', 'user', user.id, null, { username: user.username })
+      return userOut(user)
+    })()
   }
 
   if (method === 'get' && path === '/auth/users') {
@@ -303,15 +338,19 @@ function route(db: LocalDB, method: string, path: string, params: Params, body: 
   if (method === 'post' && path === '/auth/users') {
     const username = requireStr(body?.username, 'اسم المستخدم مطلوب')
     if (db.users.some((u) => u.username === username)) throw badRequest('اسم المستخدم موجود')
-    const user: LocalUser = {
-      id: db.users.reduce((max, u) => Math.max(max, u.id), 0) + 1,
-      username,
-      password: String(body?.password ?? ''),
-      full_name: String(body?.full_name ?? username),
-      role: String(body?.role ?? 'viewer'),
-    }
-    db.users.push(user)
-    return userOut(user)
+    const password = String(body?.password ?? '')
+    if (password.length < 8) throw badRequest('كلمة المرور يجب أن تكون 8 أحرف على الأقل')
+    return (async () => {
+      const user: LocalUser = {
+        id: db.users.reduce((max, u) => Math.max(max, u.id), 0) + 1,
+        username,
+        password_hash: await hashPassword(password),
+        full_name: String(body?.full_name ?? username),
+        role: String(body?.role ?? 'viewer'),
+      }
+      db.users.push(user)
+      return userOut(user)
+    })()
   }
 
   /* ---------------------------- الإعدادات -------------------------- */

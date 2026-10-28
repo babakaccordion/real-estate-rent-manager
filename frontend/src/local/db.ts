@@ -9,9 +9,6 @@ export const LOCAL_STORAGE_NOTE =
 export const DOWNLOAD_HINT =
   'في الآيفون: يُحفظ الملف في تطبيق «الملفات» → التنزيلات. احتفظ به في iCloud أو أرسله لنفسك.'
 
-export const DEFAULT_USERNAME = 'admin'
-export const DEFAULT_PASSWORD = 'REMOVED'
-
 const DEFAULT_SETTINGS: Record<string, string> = {
   app_name: 'العقارات والإيجارات',
   currency: 'JOD',
@@ -27,15 +24,8 @@ export function emptyDB(): LocalDB {
   return {
     version: DB_VERSION,
     counters: {},
-    users: [
-      {
-        id: 1,
-        username: DEFAULT_USERNAME,
-        password: DEFAULT_PASSWORD,
-        full_name: 'مدير النظام',
-        role: 'admin',
-      },
-    ],
+    // لا يوجد أي مستخدم افتراضي: يُنشئ المستخدم بيانات دخوله الخاصة عند أول تشغيل.
+    users: [],
     settings: { ...DEFAULT_SETTINGS },
     properties: [],
     units: [],
@@ -62,7 +52,10 @@ function normalize(db: LocalDB): LocalDB {
   const out: LocalDB = { ...base, ...db }
   out.settings = { ...DEFAULT_SETTINGS, ...(db.settings || {}) }
   out.counters = db.counters || {}
-  out.users = db.users && db.users.length ? db.users : base.users
+  const users = Array.isArray(db.users) ? (db.users as any[]) : []
+  // ترقية أمنية: النسخ القديمة كانت تحفظ كلمة المرور نصًا صريحًا؛ تُلغى ويُطلب إنشاء بيانات دخول جديدة.
+  const legacy = users.some((u) => !u || typeof u.password_hash !== 'string' || !u.password_hash)
+  out.users = legacy ? [] : (users as LocalDB['users'])
   for (const key of ['properties', 'units', 'tenants', 'leases', 'charges', 'payments', 'allocations', 'expenses', 'movements', 'notes', 'audit'] as const) {
     if (!Array.isArray(out[key])) (out as any)[key] = []
   }

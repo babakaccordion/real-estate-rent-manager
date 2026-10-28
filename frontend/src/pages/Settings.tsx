@@ -119,6 +119,10 @@ export default function SettingsPage() {
       toast.show('أدخل كلمة المرور الحالية أولاً', 'error')
       return
     }
+    if (newPassword && newPassword.length < 8) {
+      toast.show('كلمة المرور يجب أن تكون 8 أحرف على الأقل', 'error')
+      return
+    }
     if (newPassword && newPassword !== confirmPassword) {
       toast.show('كلمتا المرور الجديدتان غير متطابقتين', 'error')
       return
@@ -248,7 +252,9 @@ export default function SettingsPage() {
           <Button onClick={submitCredentials} disabled={savingCreds}>
             {savingCreds ? 'جارٍ الحفظ...' : 'حفظ بيانات الدخول'}
           </Button>
-          <div className="text-xs text-gray-500">كلمة المرور الافتراضية: REMOVED — يُنصح بتغييرها.</div>
+          <div className="text-xs text-gray-500">
+            بيانات الدخول خاصة بك، تُحفظ مشفّرة على هذا الجهاز/الخادم فقط، ولا تُنشر في أي موقع.
+          </div>
         </CardContent>
       </Card>
 
