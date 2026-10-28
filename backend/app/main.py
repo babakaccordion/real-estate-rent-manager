@@ -30,7 +30,7 @@ try:
         db.add(User(username=ADMIN_USERNAME, hashed_password=hash_password(ADMIN_PASSWORD), full_name="مدير النظام", role=UserRole.ADMIN.value))
         db.commit()
     # default settings
-    defaults = {"currency": "JOD", "decimal_places": "3", "timezone": "Asia/Amman", "company_name": "العقارات والإيجارات", "auto_backup": "1"}
+    defaults = {"currency": "JOD", "decimal_places": "3", "timezone": "Asia/Amman", "company_name": "العقارات والإيجارات", "auto_backup": "1", "general_notes": ""}
     for k, v in defaults.items():
         if not db.query(AppSetting).filter(AppSetting.key == k).first():
             db.add(AppSetting(key=k, value=v))

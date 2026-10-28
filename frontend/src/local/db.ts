@@ -18,6 +18,7 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   decimal_places: '3',
   timezone: 'Asia/Amman',
   auto_backup: '1',
+  general_notes: '',
 }
 
 let cache: LocalDB | null = null

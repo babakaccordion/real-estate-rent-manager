@@ -43,7 +43,6 @@ export default function Login() {
           {error && <div className="text-red-600 text-sm">{error}</div>}
           <Button type="submit" className="w-full" disabled={loading}>{loading ? 'جارٍ الدخول...' : 'تسجيل الدخول'}</Button>
         </form>
-        <p className="text-xs text-gray-400 mt-6 text-center">الافتراضي: admin / REMOVED</p>
       </div>
     </div>
   )
