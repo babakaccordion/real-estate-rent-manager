@@ -8,6 +8,7 @@ import { Input, Label } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { Modal } from '../components/ui/Modal'
 import { formatMoney, formatDate } from '../lib/utils'
+import { localDateKey } from '../lib/dates'
 import { Plus, Trash2 } from 'lucide-react'
 
 const CAT_LABELS: Record<string,string> = { maintenance:'صيانة', repair:'إصلاح أعطال', utilities:'أجور خدمات', water_electric:'فواتير المياه والكهرباء', taxes_fees:'رسوم وضرائب', cleaning:'تنظيف', other:'أخرى' }
@@ -17,7 +18,7 @@ export default function Expenses() {
   const toast = useToast()
   const [open, setOpen] = useState(false)
   const [filters, setFilters] = useState<any>({ property_id: '' })
-  const [form, setForm] = useState<any>({ property_id: '', category: 'other', amount: '', expense_date: new Date().toISOString().slice(0, 10), description: '', is_paid: true, notes: '' })
+  const [form, setForm] = useState<any>({ property_id: '', category: 'other', amount: '', expense_date: localDateKey(), description: '', is_paid: true, notes: '' })
 
   const { data: expenses = [] } = useQuery({
     queryKey: ['expenses', filters],

@@ -1,25 +1,14 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '../api/client'
+import { api, LOCAL_MODE } from '../api/client'
+import { buildReportDocument, exportReportCsv, exportReportExcel, printReport } from '../local/export'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Select } from '../components/ui/Select'
 import { Input } from '../components/ui/Input'
 import { formatMoney, formatDate } from '../lib/utils'
 
-function periodRange(key: string): [string, string] {
-  const now = new Date()
-  const y = now.getFullYear(), m = now.getMonth()
-  const fmt = (d: Date) => d.toISOString().slice(0, 10)
-  switch (key) {
-    case 'today': { const d = new Date(); return [fmt(d), fmt(d)] }
-    case 'month': return [fmt(new Date(y, m, 1)), fmt(new Date(y, m + 1, 0))]
-    case 'prevMonth': return [fmt(new Date(y, m - 1, 1)), fmt(new Date(y, m, 0))]
-    case 'year': return [fmt(new Date(y, 0, 1)), fmt(new Date(y, 11, 31))]
-    case 'prevYear': return [fmt(new Date(y - 1, 0, 1)), fmt(new Date(y - 1, 11, 31))]
-    default: return [fmt(new Date(y, m, 1)), fmt(new Date(y, m + 1, 0))]
-  }
-}
+import { periodRange } from '../lib/dates'
 
 export default function Reports() {
   const [kind, setKind] = useState('overall')
@@ -53,6 +42,17 @@ export default function Reports() {
   })
 
   const exportFile = (format: 'pdf' | 'excel' | 'csv') => {
+    if (LOCAL_MODE) {
+      if (!report) {
+        alert('لا توجد بيانات للتصدير في هذه الفترة')
+        return
+      }
+      const doc = buildReportDocument(kind, report, start, end)
+      if (format === 'csv') exportReportCsv(doc)
+      else if (format === 'excel') exportReportExcel(doc)
+      else printReport(doc)
+      return
+    }
     const params = new URLSearchParams({ kind: kind === 'property' ? 'property' : kind === 'overall' ? 'overall' : kind === 'cash' ? 'cash' : kind === 'arrears' ? 'arrears' : 'overall', start, end })
     if (propId) params.set('property_id', propId)
     const url = `/api/reports/export/${format}?${params.toString()}`

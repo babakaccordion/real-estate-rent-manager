@@ -8,6 +8,7 @@ import { Input, Label } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { Modal } from '../components/ui/Modal'
 import { formatMoney, formatDate } from '../lib/utils'
+import { localDateKey } from '../lib/dates'
 import { XCircle } from 'lucide-react'
 
 const STATUS_LABELS: Record<string,string> = { due:'مستحق', partial:'مدفوع جزئيًا', paid:'مدفوع بالكامل', overdue:'متأخر', cancelled:'ملغى' }
@@ -17,7 +18,7 @@ export default function Charges() {
   const toast = useToast()
   const [filters, setFilters] = useState<any>({ property_id: '', tenant_id: '', status: '' })
   const [payOpen, setPayOpen] = useState(false)
-  const [payForm, setPayForm] = useState<any>({ amount: '', payment_date: new Date().toISOString().slice(0, 10), method: 'cash', notes: '' })
+  const [payForm, setPayForm] = useState<any>({ amount: '', payment_date: localDateKey(), method: 'cash', notes: '' })
 
   const { data: charges = [] } = useQuery({
     queryKey: ['charges', filters],
@@ -39,7 +40,7 @@ export default function Charges() {
 
   const openPay = (c: any) => {
     const remaining = (c.amount_due - c.amount_paid)
-    setPayForm({ amount: remaining.toFixed(3), payment_date: new Date().toISOString().slice(0, 10), method: 'cash', notes: '', charge_id: c.id, tenant_id: c.tenant_id, property_id: c.property_id })
+    setPayForm({ amount: remaining.toFixed(3), payment_date: localDateKey(), method: 'cash', notes: '', charge_id: c.id, tenant_id: c.tenant_id, property_id: c.property_id })
     setPayOpen(true)
   }
 

@@ -64,7 +64,7 @@ export default function Layout() {
 
       {/* Main */}
       <div className="flex-1 md:mr-64 pb-16 md:pb-0">
-        <header className="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+        <header className="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-between">
           <button className="md:hidden p-2" onClick={() => setOpen(!open)}>
             {open ? <X size={20} /> : <Menu size={20} />}
           </button>
@@ -77,7 +77,7 @@ export default function Layout() {
       </div>
 
       {/* Bottom nav (mobile) */}
-      <nav className="md:hidden fixed bottom-0 right-0 left-0 bg-white border-t border-gray-200 z-30 flex justify-around py-2">
+      <nav className="md:hidden fixed bottom-0 right-0 left-0 bg-white border-t border-gray-200 z-30 flex justify-around pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {bottomNav.map((n) => (
           <NavLink key={n.to} to={n.to} end={n.to === '/'}
             className={({ isActive }) => `flex flex-col items-center text-xs ${isActive ? 'text-[#1e3a5f]' : 'text-gray-500'}`}>

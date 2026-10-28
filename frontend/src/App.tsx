@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
+import { LOCAL_MODE } from './api/client'
 import { ToastProvider } from './contexts/ToastContext'
 import Layout from './components/Layout'
 import Login from './pages/Login'
@@ -26,10 +27,11 @@ function Protected({ children }: { children: ReactNode }) {
 }
 
 export default function App() {
+  const Router = LOCAL_MODE ? HashRouter : BrowserRouter
   return (
     <AuthProvider>
       <ToastProvider>
-        <BrowserRouter>
+        <Router>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<Protected><Layout /></Protected>}>
@@ -49,7 +51,7 @@ export default function App() {
               <Route path="audit" element={<AuditPage />} />
             </Route>
           </Routes>
-        </BrowserRouter>
+        </Router>
       </ToastProvider>
     </AuthProvider>
   )

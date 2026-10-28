@@ -8,13 +8,14 @@ import { Input, Label } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { Modal } from '../components/ui/Modal'
 import { formatMoney, formatDate } from '../lib/utils'
+import { localDateKey } from '../lib/dates'
 import { Plus, Trash2 } from 'lucide-react'
 
 export default function Payments() {
   const qc = useQueryClient()
   const toast = useToast()
   const [open, setOpen] = useState(false)
-  const [form, setForm] = useState<any>({ tenant_id: '', amount: '', payment_date: new Date().toISOString().slice(0, 10), method: 'cash', property_id: '', notes: '', charge_id: '' })
+  const [form, setForm] = useState<any>({ tenant_id: '', amount: '', payment_date: localDateKey(), method: 'cash', property_id: '', notes: '', charge_id: '' })
   const [filters, setFilters] = useState<any>({ property_id: '', tenant_id: '' })
 
   const { data: payments = [] } = useQuery({

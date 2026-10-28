@@ -8,6 +8,7 @@ import { Input, Label } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { Modal } from '../components/ui/Modal'
 import { formatMoney, formatDate } from '../lib/utils'
+import { localDateKey } from '../lib/dates'
 import { Plus, Trash2 } from 'lucide-react'
 
 const TYPE_LABELS: Record<string,string> = { opening_balance:'رصيد افتتاحي', rent_receipt:'قبض إيجار', expense:'مصروف', adjustment:'تسوية', other:'أخرى' }
@@ -17,7 +18,7 @@ export default function Cash() {
   const toast = useToast()
   const [open, setOpen] = useState(false)
   const [filters, setFilters] = useState<any>({ property_id: '' })
-  const [form, setForm] = useState<any>({ movement_type: 'opening_balance', amount: '', movement_date: new Date().toISOString().slice(0, 10), property_id: '', category: '', description: '', notes: '', method: '', receipt_ref: '' })
+  const [form, setForm] = useState<any>({ movement_type: 'opening_balance', amount: '', movement_date: localDateKey(), property_id: '', category: '', description: '', notes: '', method: '', receipt_ref: '' })
 
   const { data: movements = [] } = useQuery({
     queryKey: ['cash', filters],

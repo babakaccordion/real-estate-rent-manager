@@ -7,19 +7,7 @@ import { formatMoney, formatDate } from '../lib/utils'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { Building2, Home, Users, DollarSign, AlertTriangle, TrendingUp } from 'lucide-react'
 
-function periodRange(key: string): [string, string] {
-  const now = new Date()
-  const y = now.getFullYear(), m = now.getMonth()
-  const fmt = (d: Date) => d.toISOString().slice(0, 10)
-  switch (key) {
-    case 'today': { const d = new Date(); return [fmt(d), fmt(d)] }
-    case 'month': return [fmt(new Date(y, m, 1)), fmt(new Date(y, m + 1, 0))]
-    case 'prevMonth': return [fmt(new Date(y, m - 1, 1)), fmt(new Date(y, m, 0))]
-    case 'year': return [fmt(new Date(y, 0, 1)), fmt(new Date(y, 11, 31))]
-    case 'prevYear': return [fmt(new Date(y - 1, 0, 1)), fmt(new Date(y - 1, 11, 31))]
-    default: return [fmt(new Date(y, m, 1)), fmt(new Date(y, m + 1, 0))]
-  }
-}
+import { periodRange } from '../lib/dates'
 
 export default function Dashboard() {
   const [period, setPeriod] = useState('month')

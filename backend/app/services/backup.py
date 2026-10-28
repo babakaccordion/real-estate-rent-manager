@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal
 from sqlalchemy.orm import Session
 from ..models import (
@@ -35,6 +35,49 @@ def export_all(db: Session) -> str:
     return str(path)
 
 
+def _coerce_row(model, row: dict) -> dict:
+    """يحوّل قيم JSON (نصوص) إلى أنواع الأعمدة قبل الإدراج.
+
+    ملفات النسخ الاحتياطي تحفظ التواريخ والأرقام كنصوص، وSQLAlchemy يرفض
+    إدراج النص في عمود DateTime، لذا نحوّلها هنا. التواريخ تُخزَّن UTC وبدون
+    منطقة زمنية كما يفعل باقي التطبيق.
+    """
+    out = {}
+    for col in model.__table__.columns:
+        if col.name not in row:
+            continue
+        value = row[col.name]
+        if value is None:
+            out[col.name] = None
+            continue
+        try:
+            py_type = col.type.python_type
+        except (NotImplementedError, AttributeError):
+            out[col.name] = value
+            continue
+        try:
+            if py_type is datetime and isinstance(value, str):
+                dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                if dt.tzinfo is not None:
+                    dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+                out[col.name] = dt
+            elif py_type is date and isinstance(value, str):
+                out[col.name] = date.fromisoformat(value[:10])
+            elif py_type is Decimal:
+                out[col.name] = Decimal(str(value))
+            elif py_type is bool:
+                out[col.name] = value if isinstance(value, bool) else str(value).strip().lower() in ("1", "true", "yes", "on")
+            elif py_type is int and not isinstance(value, int):
+                out[col.name] = int(value)
+            elif py_type is float and not isinstance(value, float):
+                out[col.name] = float(value)
+            else:
+                out[col.name] = value
+        except (TypeError, ValueError):
+            out[col.name] = value
+    return out
+
+
 def restore_from_file(db: Session, path: str) -> dict:
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
@@ -46,7 +89,7 @@ def restore_from_file(db: Session, path: str) -> dict:
 
     def load(name, model):
         for row in data.get(name, []):
-            obj = model(**row)
+            obj = model(**_coerce_row(model, row))
             db.add(obj)
         db.commit()
 

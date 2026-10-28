@@ -18,6 +18,17 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   direction: rtl;
+  min-height: 100dvh;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* على الآيفون: امنع تكبير الصفحة تلقائيًا عند لمس حقول الإدخال */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }
 
 .dark {
