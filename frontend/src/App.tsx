@@ -32,8 +32,8 @@ export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
-        {/* شاشة الترحيب تظهر عند فتح تطبيق الهاتف فقط */}
-        {LOCAL_MODE && <SplashScreen />}
+        {/* شاشة الترحيب عند فتح التطبيق (الهاتف والكمبيوتر) */}
+        <SplashScreen />
         <Router>
           <Routes>
             <Route path="/login" element={<Login />} />

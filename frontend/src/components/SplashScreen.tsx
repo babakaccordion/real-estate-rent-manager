@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 
-/** مدة بقاء شاشة الترحيب ظاهرة، ثم مدة التلاشي التدريجي. */
-const HOLD_MS = 1900
-const FADE_MS = 500
+/** مدة بقاء شاشة الترحيب ظاهرة (٣ ثوانٍ)، ثم مدة التلاشي التدريجي. */
+const HOLD_MS = 3000
+const FADE_MS = 400
 const SRC = `${import.meta.env.BASE_URL}splash.jpg`
 
 /**
