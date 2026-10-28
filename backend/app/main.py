@@ -51,10 +51,14 @@ app.include_router(settings.router)
 app.include_router(backup.router)
 app.include_router(audit.router)
 
-app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
-app.mount("/data", StaticFiles(directory=str(DATA_DIR)), name="data")
-
-
 @app.get("/health")
 def health():
     return {"status": "ok", "app": "العقارات والإيجارات"}
+
+
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+
+from pathlib import Path as _P
+_static = _P(__file__).resolve().parent.parent / "static"
+if _static.exists():
+    app.mount("/", StaticFiles(directory=str(_static), html=True), name="static")
