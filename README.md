@@ -60,6 +60,10 @@ npm run build
 
 https://github.com/babakaccordion/real-estate-rent-manager
 
+## تحميل نسخة ويندوز
+
+https://github.com/babakaccordion/real-estate-rent-manager/releases/latest
+
 ## مكان تخزين البيانات
 
 - قاعدة البيانات: `backend/data/app.db` (SQLite)
